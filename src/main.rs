@@ -28,7 +28,7 @@ fn change_profile(profile : String) -> Result<u32, String>{
         // call setprocattr
         match setprocattr(unsafe{ getpid()}, "current".to_string(), buf){
             Err(er) => Err(er),
-            Ok(_) => Ok(0)
+            Ok(_) => Ok(1)
         }
     }
 }
