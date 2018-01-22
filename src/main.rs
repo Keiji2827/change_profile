@@ -2,10 +2,11 @@ extern crate libc;
 extern crate regex;
 use libc::{pid_t, getpid};
 use std::fs::File;
+use std::io::BufReader;
 use std::io::prelude::*;
-use regex::Regex;
-
-enum SecurityApp{AppArmor, SELinux,}
+//use regex::Regex;
+#[derive(PartialEq, Eq)]
+enum SecurityApp{AppArmor, SELinux, Error}
 
 fn change_profile(profile : String) -> Result<u32, String>{
     // confirm if profile is empty
@@ -20,6 +21,7 @@ fn change_profile(profile : String) -> Result<u32, String>{
             // merge "changeprofile + profile"
             SecurityApp::AppArmor => buf = format!("changeprofile {}", profile),
             SecurityApp::SELinux  => buf = format!("{}", profile),
+            SecurityApp::Error    => {println!("There is no security package working.");return Ok(0)},
         }
         println!("You will execute \"{}\"", &buf);
 
@@ -34,31 +36,43 @@ fn change_profile(profile : String) -> Result<u32, String>{
 fn checksecurity() -> Result<SecurityApp, String> {
     let aa_path = "/sys/module/apparmor/parameters/enabled";
     let se_path = "/proc/filesystems";
-    let select;
+    let mut select = SecurityApp::Error;
 
-    // open AppArmor enabled file
-    let mut aa_fd = File::open(aa_path);
+    if let Ok(file) = File::open(aa_path) {
+        let mut reader = BufReader::new(file);
+        let mut contents = String::new();
+        if let Ok(_) = reader.read_to_string(&mut contents) {
+            println!("{:?}", &contents);
+            match &*contents {
+                "Y" => select = SecurityApp::AppArmor,
+                &_  => {},
+            }
+        }
+        else {Err("error")};
+    }
 
-    match aa_fd {
+    if select == SecurityApp::AppArmor {
+        return Ok(SecurityApp::AppArmor);
+    }
+
+    match  File::open(se_path) {
         Ok(mut file) => {
             let mut contents = String::new();
             file.read_to_string(&mut contents);
-            println!("{:?}",contents);
-            Ok(SecurityApp::AppArmor)
-        },
-        Err(_)   => {
-            let mut se_fd = File::open(se_path);
-            match se_fd {
-                Ok(mut file2) => {
-                    let mut contents2 = String::new();
-                    file2.read_to_string(&mut contents2);
-                    println!("{:?}",contents2);
-                    Ok(SecurityApp::AppArmor)
-                }
-                Err(_) => Err("both do not work.".to_string())
+            println!("{:?}", &contents);
+// @todo search for selinux 
+/*            match contents {
+                "Y" => select = SecurityApp::AppArmor;
             }
-        }
+*/
+        },
+        Err(_) => {},
     }
+    if select == SecurityApp::SELinux {
+        return Ok(SecurityApp::SELinux);
+    }
+
+    Err("both do not work.".to_string())
 }
 
 fn setprocattr(tid : pid_t, attr : String, buf : String) -> Result<u32, String> {
