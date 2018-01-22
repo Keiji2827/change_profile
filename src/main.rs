@@ -4,7 +4,7 @@ use libc::{pid_t, getpid};
 use std::fs::{File, OpenOptions};
 use std::io::BufReader;
 use std::io::prelude::*;
-//use regex::Regex;
+
 #[derive(PartialEq, Eq)]
 enum SecurityApp{AppArmor, SELinux, None}
 
@@ -42,9 +42,8 @@ fn checksecurity() -> Result<SecurityApp, String> {
         let mut reader = BufReader::new(file);
         let mut contents = String::new();
         if let Ok(_) = reader.read_to_string(&mut contents) {
-            println!("{:?}", &contents);
             match &*contents {
-                "Y" => select = SecurityApp::AppArmor,
+                "Y\n" => select = {println!("AppArmor is working");SecurityApp::AppArmor},
                 &_  => {},
             }
         }
@@ -61,7 +60,7 @@ fn checksecurity() -> Result<SecurityApp, String> {
         for line in reader.lines() {
             let l = line.unwrap();
             if l.contains("selinux") {
-                println!("found selinux");
+                println!("selinux is working");
                 select = SecurityApp::SELinux;
                 break;
             }
@@ -81,7 +80,6 @@ fn setprocattr(tid : pid_t, attr : String, buf : String) -> Result<u32, String> 
     let ctl = try!(procattr_path(tid, attr));
     
     // file open
-    //let mut fd = match File::create(ctl) {
     let mut fd = match OpenOptions::new().write(true).open(ctl) {
         Err(_) => panic!("File couldn't be opened"),
         Ok(file) => file,
